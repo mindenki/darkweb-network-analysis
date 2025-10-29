@@ -21,3 +21,46 @@ def load_data():
     
     return nodes, edges
 
+def transform_node_ids(nodes: pd.DataFrame) -> pd.DataFrame:
+    """Transform node IDs by replacing the original Ids with new sequential integers and storing the original Ids in a new column 'Name'.
+
+    Args:
+        nodes (pd.DataFrame): input nodes df
+
+    Returns:
+        pd.DataFrame: transformed nodes df with Id as indexes and name as a column
+    """
+    nodes["Name"] = nodes["Id"]
+    nodes["Id"] = range(len(nodes))
+    return nodes
+
+def transform_edge_ids(edges: pd.DataFrame, nodes: pd.DataFrame) -> pd.DataFrame:
+    """Transform edge source and target names to their corresponding node Ids.
+
+    Args:
+        edges (pd.DataFrame): _input edges df
+        nodes (pd.DataFrame): nodes df transformed with transform_node_ids
+
+    Returns:
+        pd.DataFrame: transformed edges df with Source and Target as node Ids
+    """
+    name_to_id = dict(zip(nodes["Name"], nodes["Id"]))
+    edges = edges.copy()
+    
+    edges["Source"] = edges["Source"].map(name_to_id)
+    edges["Target"] = edges["Target"].map(name_to_id)
+
+    missing_sources = edges["Source"].isna().sum()
+    missing_targets = edges["Target"].isna().sum()
+    if missing_sources or missing_targets:
+        print(f"Missing Source IDs: {missing_sources}, Missing Target IDs: {missing_targets}")
+
+    edges = edges.dropna(subset=["Source", "Target"]).astype({"Source": int, "Target": int})
+
+    return edges
+
+
+
+
+
+
