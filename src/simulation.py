@@ -32,12 +32,13 @@ class NetworkAttackSimulation():
         pass
 
 
-    def measure_network_state(G):
+    def measure_network_state(self, G):
         """
         Compute a set of structural network metrics for the current graph state.
         Returns a dictionary that can be appended to `history`.
         """
         metrics = {}
+        change = {}
 
         # Average in and out degree
         metrics["num_nodes"] = G.number_of_nodes()
@@ -75,40 +76,45 @@ class NetworkAttackSimulation():
         betweenness = nx.betweenness_centrality(G)
         closeness = nx.closeness_centrality(G)
         pagerank = nx.pagerank(G)
+        
         #avg centrality values
         metrics["avg_betweenness"] = np.mean(list(betweenness.values()))
         metrics["avg_closeness"] = np.mean(list(closeness.values()))
         metrics["avg_pagerank"] = np.mean(list(pagerank.values()))
-        #top 3 nodes by centrality
-        metrics["top_3_betweenness"] = sorted(betweenness.items(), key=lambda x: x[1], reverse=True)[:3]
-        metrics["top_3_closeness"] = sorted(closeness.items(), key=lambda x: x[1], reverse=True)[:3]
-        metrics["top_3_pagerank"] = sorted(pagerank.items(), key=lambda x: x[1], reverse=True)[:3]
         
+        #top 3 nodes by centrality
+        # metrics["top_3_betweenness"] = sorted(betweenness.items(), key=lambda x: x[1], reverse=True)[:3]
+        # metrics["top_3_closeness"] = sorted(closeness.items(), key=lambda x: x[1], reverse=True)[:3]
+        # metrics["top_3_pagerank"] = sorted(pagerank.items(), key=lambda x: x[1], reverse=True)[:3]
+        
+        #path lengths
+        largest_scc = G.subgraph(largest_scc).copy()
+        asp = nx.average_shortest_path_length(largest_scc)
+        diam = nx.diameter(largest_scc)
+        metrics["avg_shortest_path_length"] = asp
+        metrics["diameter"] = diam
 
-        # ---------- PATH LENGTH ----------
-        try:
-            # Approximate characteristic path length in giant component
-            GCC = G.subgraph(max(nx.connected_components(G.to_undirected()), key=len))
-            if GCC.number_of_nodes() > 1:
-                metrics["avg_path_length_gcc"] = nx.average_shortest_path_length(GCC)
-            else:
-                metrics["avg_path_length_gcc"] = 0
-        except:
-            metrics["avg_path_length_gcc"] = None
-
-        # ---------- CLUSTERING ----------
-        metrics["avg_clustering"] = nx.average_clustering(G.to_undirected())
-
-        # Transitivity
-        metrics["transitivity"] = nx.transitivity(G.to_undirected())
-
-        # ---------- ASSORTATIVITY ----------
-        try:
-            metrics["assortativity"] = nx.degree_assortativity_coefficient(G)
-        except:
-            metrics["assortativity"] = None
-
-        return metrics
+        # Clustering
+        global_clustering = nx.transitivity(G) # global cluserting
+        avg_clustering = nx.average_clustering(G)   # average local clustering
+        metrics["global_clustering"] = global_clustering
+        metrics["avg_clustering"] = avg_clustering
+        
+        # Assortativity
+        assortativity = nx.degree_assortativity_coefficient(G)
+        metrics["assortativity"] = assortativity
+        
+        #Change compared to last state
+        if len(self.history) > 0:
+            last_metrics = self.history[-1]
+            for key in metrics.keys():
+                change_key = f"change_in_{key}"
+                if last_metrics[key] != 0:
+                    change[change_key] = (metrics[key] - last_metrics[key]) / abs(last_metrics[key])
+                else:
+                    change[change_key] = 0
+        
+        return metrics, change
 
     def uniform_recovery():
         pass
