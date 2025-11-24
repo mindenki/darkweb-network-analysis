@@ -2,6 +2,7 @@ import networkx as nx
 import numpy as np
 import random
 import copy
+from typing import Literal
 
 class NetworkAttackSimulation():
     def __init__(self, 
@@ -32,9 +33,49 @@ class NetworkAttackSimulation():
         pass
     def random_attack():
         pass
-    def targeted_attack():
-        pass
 
+    def targeted_attack(self, metric: Literal["betweenness", "closeness", "in_degree", "out_degree", "pagerank", "harmonic"] = 'harmonic', num_nodes_to_remove: int = 1):
+        
+        G = self.graph
+        
+        if G.number_of_nodes() == 0:
+            self.attack_log.append([])
+            return
+        
+        dict_metric = {
+            "betweenness": nx.betweenness_centrality,
+            "closeness": nx.closeness_centrality,
+            "pagerank": nx.pagerank,
+            "in_degree": dict(G.in_degree()),
+            "out_degree": dict(G.out_degree()),
+            "harmonic": nx.harmonic_centrality
+        }
+        
+        if metric not in dict_metric:
+            raise ValueError(f"Invalid metric: {metric}. Choose from: {list(dict_metric.keys())}")
+        
+        metric_obj = dict_metric[metric]
+        
+        if callable(metric_obj):
+            centrality = metric_obj(G)
+        else:
+            centrality = metric_obj
+        
+        if not isinstance(centrality, dict):
+            raise TypeError(f"Centrality computation failed. Expected dict, got {type(centrality)}")
+        
+        sorted_nodes = sorted(centrality.items(), key=lambda x: x[1], reverse=True)
+        
+        nodes_to_remove = [node for node, _ in sorted_nodes[:num_nodes_to_remove]]
+        
+        for node in nodes_to_remove:
+            if G.has_node(node):
+                G.remove_node(node)
+                self.removed_nodes.add(node)
+        
+        self.attack_log.append(nodes_to_remove)
+        
+        return
 
     def measure_network_state(self):
         """
