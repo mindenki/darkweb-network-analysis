@@ -10,28 +10,43 @@ class NetworkAttackSimulation():
                  type_of_attack: str="random", 
                  type_of_recovery:str = None, 
                  num_of_iter: int=100, 
-                 metrics: list=None, 
-                 recovery_prob: float=None, 
+                 #metrics: list=None, 
+                 recovery_prob: float=.01, 
                  random_seed: int=42
                  ):
         self.graph = graph
         self.type_of_attack = type_of_attack
         self.type_of_recovery = type_of_recovery
         self.num_of_iter = num_of_iter
-        self.metrics = metrics
+        #self.metrics = metrics
         self.recovery_prob = recovery_prob
         self.random_seed = random_seed
-        self.history = list[dict]
-        self.chnge_history = list[dict]
-        self.attack_log = list[list]
-        self.recovery_log = list[list]
-        self.removed_nodes = set()
-        self.original_graph = copy.deepcopy(self.graph)
-        self.recovery_edge_probability = 0.001
+        self.history:list[dict] = []
+        self.change_history:list[dict] = []
+        self.attack_log: list[list] = []
+        self.recovery_log: list[list] = []
+        self.removed_nodes: set = set()
+        self.original_graph: nx.DiGraph = copy.deepcopy(self.graph)
+        self.recovery_edge_probability: int = 0.001
+        self.iterations_completed: int = 0
+        np.random.seed(self.random_seed)
     
-    def reset():
-        pass
-    def random_attack():
+    def reset(self):
+        """ Reset the simulation to its initial state."""
+        # reset the graph
+        self.graph = copy.deepcopy(self.original_graph)
+        
+        # clear the logs
+        self.history = []
+        self.change_history = []
+        self.attack_log = []
+        self.recovery_log = []
+        self.removed_nodes = set()
+        
+        # reseed just in case
+        np.random.seed(self.random_seed)
+        
+    def random_attack(self):
         pass
 
     def targeted_attack(self, metric: Literal["betweenness", "closeness", "in_degree", "out_degree", "pagerank", "harmonic"] = 'harmonic', num_nodes_to_remove: int = 1):
@@ -165,11 +180,11 @@ class NetworkAttackSimulation():
                 change[change_key] = 0
                     
         self.history.append(metrics)
-        self.chnge_history.append(change)
+        self.change_history.append(change)
         
         return
 
-    def uniform_recovery():
+    def uniform_recovery(self):
         pass
   
     def weighted_recovery(self, comeback_probability, metric_of_choice):
@@ -252,7 +267,51 @@ class NetworkAttackSimulation():
         # Log this iteration
         self.recovery_log.append(recovered_nodes)
 
-    def plots():
+    def plots(self):
         pass
-    def run():
-        pass
+    def run(self, num_of_iter: int=None):
+        """ Run the simulation over the specified number of iterations. 
+        At each iteration, perform an attack, measure the network state, and optionally perform recovery.
+        """
+        
+        
+        self.reset() # maybe not needed
+        
+        
+        if num_of_iter is not None:
+            self.num_of_iter = num_of_iter
+            
+        
+        # main loop
+        for i in range(self.num_of_iter):
+            
+            
+            # ATTACK
+            if self.type_of_attack == "random":
+                self.random_attack()
+            elif self.type_of_attack == "targeted":
+                self.targeted_attack()
+            else:
+                raise ValueError(f"Unknown attack type: {self.type_of_attack}")
+            
+        
+            
+            # RECOVERY
+            if self.type_of_recovery == "uniform":
+                self.uniform_recovery()
+            elif self.type_of_recovery == "weighted":
+                if self.recovery_prob is None:
+                    raise ValueError("recovery_prob must be set for weighted recovery")
+                self.weighted_recovery(comeback_probability=self.recovery_prob, metric_of_choice="pagerank")
+            
+            
+            
+            # MEASURE
+            self.measure_network_state()
+            
+            self.iterations_completed += 1
+            # LOGGING
+            print(f"Iteration {i+1}/{self.num_of_iter}: Nodes: {self.graph.number_of_nodes()}, Edges: {self.graph.number_of_edges()}")
+            print(f"  Removed nodes so far: {len(self.removed_nodes)}")
+            print(f"  Attack log this iteration: {self.attack_log[-1]}")
+            print(f"  Recovery log this iteration: {self.recovery_log[-1]}")
