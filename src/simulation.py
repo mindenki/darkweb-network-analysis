@@ -8,17 +8,20 @@ class NetworkAttackSimulation():
     def __init__(self, 
                  graph: nx.DiGraph, 
                  type_of_attack: str="random", 
-                 type_of_recovery:str = None, 
+                 type_of_recovery:str = 'uniform', 
                  num_of_iter: int=100, 
-                 #metrics: list=None, 
-                 recovery_prob: float=.01, 
-                 random_seed: int=42
+                 metric: str="pagerank", 
+                 random_seed: int=42,
+                 recovery_scale: float=10,
+                 recovery_prob: float=0.01
                  ):
+        
         self.graph = graph
         self.type_of_attack = type_of_attack
         self.type_of_recovery = type_of_recovery
         self.num_of_iter = num_of_iter
-        #self.metrics = metrics
+        self.metric = metric
+        self.recovery_scale = recovery_scale
         self.recovery_prob = recovery_prob
         self.random_seed = random_seed
         self.history:list[dict] = []
@@ -27,7 +30,7 @@ class NetworkAttackSimulation():
         self.recovery_log: list[list] = []
         self.removed_nodes: set = set()
         self.original_graph: nx.DiGraph = copy.deepcopy(self.graph)
-        self.recovery_edge_probability: int = 0.001
+        self.recovery_edge_probability: float = 0.001
         self.iterations_completed: int = 0
         np.random.seed(self.random_seed)
     
@@ -53,7 +56,7 @@ class NetworkAttackSimulation():
         node = random.choice(nodes)
         self.graph.remove_node(node)
         self.attack_log.append([node])
-        self.removed_nodes.append(node)
+        self.removed_nodes.add(node)
 
     def targeted_attack(self, metric: Literal["betweenness", "closeness", "in_degree", "out_degree", "pagerank", "harmonic"] = 'harmonic', num_nodes_to_remove: int = 1):
         
@@ -114,8 +117,8 @@ class NetworkAttackSimulation():
         if metrics["num_nodes"] > 0:
             in_degrees = [d for d in G.in_degree()]
             out_degrees = [d for d in G.out_degree()]
-            metrics["avg_in_degree"] = np.mean(in_degrees)
-            metrics["avg_out_degree"] = np.mean(out_degrees)
+            metrics["avg_in_degree"] = np.mean(in_degrees.values())
+            metrics["avg_out_degree"] = np.mean(out_degrees.values())
         else:
             metrics["avg_in_degree"] = 0
             metrics["avg_out_degree"] = 0
@@ -192,23 +195,23 @@ class NetworkAttackSimulation():
 
     def uniform_recovery(self):
         recovered_this_iter = []
-        still_removed = []
+        still_removed = set()
         for node in self.removed_nodes:
             if random.random() < self.recovery_prob: # removed node has a high probabibility to be brought back.
                 self.graph.add_node(node)
-                if self.graph.number_of_nodes() > 1: # creating new edges
-                    target = random.choice(list(self.graph.nodes)) # randomly choooses nodes in the edge to connect to (maybe connect to higher degree nodes, centrality.)
-                    if target != node:
-                        self.graph.add_edge(node, target) # forms new edges
-                recovered_this_iter.append(node)
+                # if self.graph.number_of_nodes() > 1: # creating new edges
+                #     target = random.choice(list(self.graph.nodes)) # randomly choooses nodes in the edge to connect to (maybe connect to higher degree nodes, centrality.)
+                #     if target != node:
+                #         self.graph.add_edge(node, target) # forms new edges
+                # recovered_this_iter.append(node)
             else:
-                still_removed.append(node)
-        self.removed_nodes = still_removed
+                still_removed.add(node)
+        self.removed_nodes = still_removed | self.removed_nodes
         self.recovery_log.append(recovered_this_iter)
 
     
   
-    def weighted_recovery(self, comeback_probability, metric_of_choice):
+    def weighted_recovery(self, metric):
         """
         Perform weighted recovery of removed nodes.
         Each removed node has a comeback probability weighted by a centrality metric.
@@ -223,25 +226,31 @@ class NetworkAttackSimulation():
             return
         
         # Compute metric weights
-        if metric_of_choice == "pagerank":
+        if metric == "pagerank":
             weights = nx.pagerank(Go)
-        elif metric_of_choice == "betweenness":
+        elif metric == "betweenness":
             weights = nx.betweenness_centrality(Go)
-        elif metric_of_choice == "closeness":
+        elif metric == "closeness":
             weights = nx.closeness_centrality(Go)
-        elif metric_of_choice == "degree":
-            weights = dict(Go.degree())
+        elif metric == "in_degree":
+            weights = dict(Go.in_degree())
+            normalized_weights = np.array(list(weights.values()))
+            normalized_weights = normalized_weights / normalized_weights.sum()
+            weights = dict(zip(weights.keys(), normalized_weights))
+        elif metric == "out_degree":
+            weights = dict(Go.out_degree())
+            normalized_weights = np.array(list(weights.values()))
+            normalized_weights = normalized_weights / normalized_weights.sum()
+            weights = dict(zip(weights.keys(), normalized_weights))
         else:
-            raise ValueError("Invalid metric_of_choice")
+            raise ValueError("Invalid metric")
         
-        # Normalize weights so they sum to 1
         all_removed = list(self.removed_nodes)
-        metric_values = np.array([weights[n] for n in all_removed])
-        total = metric_values.sum()
-        metric_probs = metric_values / total
+        #since the weights are already between 0 and 1 and they sum up to 1, we can just use them directly
+        metric_probs = np.array([weights[n] for n in all_removed])
 
         # final probability 
-        final_probs = comeback_probability * metric_probs
+        final_probs = self.recovery_scale * metric_probs
         
         # Sample which nodes return
         recovered_nodes = [
@@ -251,21 +260,21 @@ class NetworkAttackSimulation():
         
         # Re-add recovered nodes
         for node in recovered_nodes:
-            if not self.G.has_node(node):
-                self.G.add_node(node)
+            if not G.has_node(node):
+                G.add_node(node)
             
         #------------------------This part is not yet decided---------------------------------
         
             # re-add outgoing edges from original graph
-            # if node in self.original_G:
-            #     for _, nbr, data in self.original_G.out_edges(node, data=True):
-            #         if nbr in self.G:
-            #             self.G.add_edge(node, nbr, **data)
+            if node in self.original_graph:
+                for _, nbr, data in self.original_graph.out_edges(node, data=True):
+                    if nbr in self.graph:
+                        self.graph.add_edge(node, nbr, **data)
                 
-            #     # re-add incoming edges
-            #     for nbr, _, data in self.original_G.in_edges(node, data=True):
-            #         if nbr in self.G:
-            #             self.G.add_edge(nbr, node, **data)
+                # re-add incoming edges
+                for nbr, _, data in self.original_graph.in_edges(node, data=True):
+                    if nbr in self.graph:
+                        self.graph.add_edge(nbr, node, **data)
         #-------------------------------------------------------------------------------------              
             
             # Add random edges uniformly with a small probability
@@ -283,7 +292,7 @@ class NetworkAttackSimulation():
                 #         self.G.add_edge(nbr, node)
         #-------------------------------------------------------------------------------------
                 # remove from removed set
-                self.removed_nodes.remove(node)
+                self.removed_nodes.discard(node)
         
         # Log this iteration
         self.recovery_log.append(recovered_nodes)
@@ -311,7 +320,7 @@ class NetworkAttackSimulation():
             if self.type_of_attack == "random":
                 self.random_attack()
             elif self.type_of_attack == "targeted":
-                self.targeted_attack()
+                self.targeted_attack(metric=self.metric)
             else:
                 raise ValueError(f"Unknown attack type: {self.type_of_attack}")
             
@@ -323,12 +332,12 @@ class NetworkAttackSimulation():
             elif self.type_of_recovery == "weighted":
                 if self.recovery_prob is None:
                     raise ValueError("recovery_prob must be set for weighted recovery")
-                self.weighted_recovery(comeback_probability=self.recovery_prob, metric_of_choice="pagerank")
+                self.weighted_recovery(metric=self.metric)
             
             
             
             # MEASURE
-            self.measure_network_state()
+            # self.measure_network_state()
             
             self.iterations_completed += 1
             # LOGGING
