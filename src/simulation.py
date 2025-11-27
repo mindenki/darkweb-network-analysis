@@ -203,7 +203,7 @@ class NetworkAttackSimulation():
                 #     target = random.choice(list(self.graph.nodes)) # randomly choooses nodes in the edge to connect to (maybe connect to higher degree nodes, centrality.)
                 #     if target != node:
                 #         self.graph.add_edge(node, target) # forms new edges
-                # recovered_this_iter.append(node)
+                recovered_this_iter.append(node)
             else:
                 still_removed.add(node)
         self.removed_nodes = still_removed | self.removed_nodes
