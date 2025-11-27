@@ -47,7 +47,13 @@ class NetworkAttackSimulation():
         np.random.seed(self.random_seed)
         
     def random_attack(self):
-        pass
+        nodes = list(self.graph.nodes) 
+        if not nodes:
+            return
+        node = random.choice(nodes)
+        self.graph.remove_node(node)
+        self.attack_log.append([node])
+        self.removed_nodes.append(node)
 
     def targeted_attack(self, metric: Literal["betweenness", "closeness", "in_degree", "out_degree", "pagerank", "harmonic"] = 'harmonic', num_nodes_to_remove: int = 1):
         
@@ -185,7 +191,22 @@ class NetworkAttackSimulation():
         return
 
     def uniform_recovery(self):
-        pass
+        recovered_this_iter = []
+        still_removed = []
+        for node in self.removed_nodes:
+            if random.random() < self.recovery_prob: # removed node has a high probabibility to be brought back.
+                self.graph.add_node(node)
+                if self.graph.number_of_nodes() > 1: # creating new edges
+                    target = random.choice(list(self.graph.nodes)) # randomly choooses nodes in the edge to connect to (maybe connect to higher degree nodes, centrality.)
+                    if target != node:
+                        self.graph.add_edge(node, target) # forms new edges
+                recovered_this_iter.append(node)
+            else:
+                still_removed.append(node)
+        self.removed_nodes = still_removed
+        self.recovery_log.append(recovered_this_iter)
+
+    
   
     def weighted_recovery(self, comeback_probability, metric_of_choice):
         """
