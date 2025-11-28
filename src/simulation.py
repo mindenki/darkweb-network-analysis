@@ -3,6 +3,8 @@ import numpy as np
 import random
 import copy
 from typing import Literal
+import matplotlib.pyplot as plt
+import numpy as np
 
 class NetworkAttackSimulation():
     def __init__(self, 
@@ -115,10 +117,10 @@ class NetworkAttackSimulation():
         metrics["num_edges"] = G.number_of_edges()
 
         if metrics["num_nodes"] > 0:
-            in_degrees = [d for d in G.in_degree()]
-            out_degrees = [d for d in G.out_degree()]
-            metrics["avg_in_degree"] = np.mean(in_degrees.values())
-            metrics["avg_out_degree"] = np.mean(out_degrees.values())
+            in_degrees = dict(G.in_degree())  
+            out_degrees = dict(G.out_degree())
+            metrics["avg_in_degree"] = np.mean(list(in_degrees.values()))
+            metrics["avg_out_degree"] = np.mean(list(out_degrees.values()))
         else:
             metrics["avg_in_degree"] = 0
             metrics["avg_out_degree"] = 0
@@ -129,13 +131,13 @@ class NetworkAttackSimulation():
         #strongly and weakly connected components
         sccs = list(nx.strongly_connected_components(G))
         num_scc = len(sccs)
-        largest_scc = max(sccs, key=len)
-        size_largest_scc = len(largest_scc)
+        largest_scc_set = max(sccs, key=len)
+        size_largest_scc = len(largest_scc_set)
             
         wccs = list(nx.weakly_connected_components(G))
         num_wcc = len(wccs)
-        largest_wcc = max(wccs, key=len)
-        size_largest_wcc = len(largest_wcc)
+        largest_wcc_set = max(wccs, key=len)
+        size_largest_wcc = len(largest_wcc_set)
 
         metrics["num_scc"] = num_scc
         metrics["size_largest_scc"] = size_largest_scc
@@ -146,23 +148,31 @@ class NetworkAttackSimulation():
         betweenness = nx.betweenness_centrality(G)
         closeness = nx.closeness_centrality(G)
         pagerank = nx.pagerank(G)
+        harmonic = nx.harmonic_centrality(G)
         
         #avg centrality values
         metrics["avg_betweenness"] = np.mean(list(betweenness.values()))
         metrics["avg_closeness"] = np.mean(list(closeness.values()))
         metrics["avg_pagerank"] = np.mean(list(pagerank.values()))
+        metrics["avg_harmonic"] = np.mean(list(harmonic.values()))
         
         #top 3 nodes by centrality
         # metrics["top_3_betweenness"] = sorted(betweenness.items(), key=lambda x: x[1], reverse=True)[:3]
         # metrics["top_3_closeness"] = sorted(closeness.items(), key=lambda x: x[1], reverse=True)[:3]
         # metrics["top_3_pagerank"] = sorted(pagerank.items(), key=lambda x: x[1], reverse=True)[:3]
+        # metrics["top_3_harmonic"] = sorted(harmonic.items(), key=lambda x: x[1], reverse=True)[:3]
         
-        #path lengths
-        largest_scc = G.subgraph(largest_scc).copy()
-        asp = nx.average_shortest_path_length(largest_scc)
-        diam = nx.diameter(largest_scc)
-        metrics["avg_shortest_path_length"] = asp
-        metrics["diameter"] = diam
+        #path lengths (only if there is a strongly connected component)
+        if size_largest_scc > 1:    
+            largest_scc_subgraph = G.subgraph(largest_scc_set).copy()
+            asp = nx.average_shortest_path_length(largest_scc_subgraph)
+            diam = nx.diameter(largest_scc_subgraph)
+            metrics["avg_shortest_path_length"] = asp
+            metrics["diameter"] = diam
+        else:
+            metrics["avg_shortest_path_length"] = 0
+            metrics["diameter"] = 0
+            
 
         # Clustering
         global_clustering = nx.transitivity(G) # global cluserting
@@ -232,6 +242,8 @@ class NetworkAttackSimulation():
             weights = nx.betweenness_centrality(Go)
         elif metric == "closeness":
             weights = nx.closeness_centrality(Go)
+        elif metric == "harmonic":
+            weights = nx.harmonic_centrality(Go)
         elif metric == "in_degree":
             weights = dict(Go.in_degree())
             normalized_weights = np.array(list(weights.values()))
@@ -297,8 +309,170 @@ class NetworkAttackSimulation():
         # Log this iteration
         self.recovery_log.append(recovered_nodes)
 
-    def plots(self):
-        pass
+    def plots(self, figsize=(16, 12), save_fig_path=None):
+        
+        if len(self.history) == 0:
+            print("No simulation data to plot")
+            return
+        
+        iterations = range(len(self.history))
+        
+        fig, axes = plt.subplots(4, 3, figsize=figsize)
+        fig.suptitle(f'Network Attack Simulation Results\n'
+                    f'Attack: {self.type_of_attack} | Recovery: {self.type_of_recovery} | '
+                    f'Metric: {self.metric}', 
+                    fontsize=14, fontweight='bold')
+        
+        axes = axes.flatten()
+        
+                    #--------------- 1. Number of Nodes and Edges ---------------
+        ax = axes[0]
+        num_nodes = [h['num_nodes'] for h in self.history]
+        num_edges = [h['num_edges'] for h in self.history]
+        ax.plot(iterations, num_nodes, label='Nodes', marker='o', markersize=3, linewidth=2)
+        ax.plot(iterations, num_edges, label='Edges', marker='s', markersize=3, linewidth=2)
+        ax.set_xlabel('Iteration')
+        ax.set_ylabel('Count')
+        ax.set_title('Network Size Over Time')
+        ax.legend()
+        ax.grid(True, alpha=0.3)
+        
+                    #--------------- 2. Average Degree ---------------
+        ax = axes[1]
+        avg_in_degree = [h['avg_in_degree'] for h in self.history]
+        avg_out_degree = [h['avg_out_degree'] for h in self.history]
+        ax.plot(iterations, avg_in_degree, label='In-Degree', marker='o', markersize=3, linewidth=2)
+        ax.plot(iterations, avg_out_degree, label='Out-Degree', marker='s', markersize=3, linewidth=2)
+        ax.set_xlabel('Iteration')
+        ax.set_ylabel('Average Degree')
+        ax.set_title('Average Node Degree')
+        ax.legend()
+        ax.grid(True, alpha=0.3)
+        
+                    #--------------- 3. Density ---------------
+        ax = axes[2]
+        density = [h['density'] for h in self.history]
+        ax.plot(iterations, density, color='green', marker='o', markersize=3, linewidth=2)
+        ax.set_xlabel('Iteration')
+        ax.set_ylabel('Density')
+        ax.set_title('Network Density')
+        ax.grid(True, alpha=0.3)
+        
+                    #--------------- 4. Connected Components ---------------
+        ax = axes[3]
+        num_scc = [h['num_scc'] for h in self.history]
+        num_wcc = [h['num_wcc'] for h in self.history]
+        ax.plot(iterations, num_scc, label='Strongly Connected', marker='o', markersize=3, linewidth=2)
+        ax.plot(iterations, num_wcc, label='Weakly Connected', marker='s', markersize=3, linewidth=2)
+        ax.set_xlabel('Iteration')
+        ax.set_ylabel('Number of Components')
+        ax.set_title('Connected Components')
+        ax.legend()
+        ax.grid(True, alpha=0.3)
+        
+                    # --------------- 5. Largest Component Size ---------------
+        ax = axes[4]
+        size_largest_scc = [h['size_largest_scc'] for h in self.history]
+        size_largest_wcc = [h['size_largest_wcc'] for h in self.history]
+        ax.plot(iterations, size_largest_scc, label='Largest SCC', marker='o', markersize=3, linewidth=2)
+        ax.plot(iterations, size_largest_wcc, label='Largest WCC', marker='s', markersize=3, linewidth=2)
+        ax.set_xlabel('Iteration')
+        ax.set_ylabel('Size')
+        ax.set_title('Largest Component Size')
+        ax.legend()
+        ax.grid(True, alpha=0.3)
+        
+                    #--------------- 6. Average Centrality Measures ---------------
+        ax = axes[5]
+        avg_betweenness = [h['avg_betweenness'] for h in self.history]
+        ax.plot(iterations, avg_betweenness, color='purple', marker='o', markersize=3, linewidth=2)
+        ax.set_xlabel('Iteration')
+        ax.set_ylabel('Average Betweenness')
+        ax.set_title('Average Betweenness Centrality')
+        ax.grid(True, alpha=0.3)
+        
+                    #--------------- 7. Closeness Centrality ---------------
+        ax = axes[6]
+        avg_closeness = [h['avg_closeness'] for h in self.history]
+        ax.plot(iterations, avg_closeness, color='orange', marker='o', markersize=3, linewidth=2)
+        ax.set_xlabel('Iteration')
+        ax.set_ylabel('Average Closeness')
+        ax.set_title('Average Closeness Centrality')
+        ax.grid(True, alpha=0.3)
+        
+                    #--------------- 8. PageRank ---------------
+        ax = axes[7]
+        avg_pagerank = [h['avg_pagerank'] for h in self.history]
+        ax.plot(iterations, avg_pagerank, color='red', marker='o', markersize=3, linewidth=2)
+        ax.set_xlabel('Iteration')
+        ax.set_ylabel('Average PageRank')
+        ax.set_title('Average PageRank')
+        ax.grid(True, alpha=0.3)
+        
+                    #--------------- 9. Path Length Metrics ---------------
+        ax = axes[8]
+        avg_shortest_path = [h['avg_shortest_path_length'] for h in self.history]
+        diameter = [h['diameter'] for h in self.history]
+        ax.plot(iterations, avg_shortest_path, label='Avg Path Length', marker='o', markersize=3, linewidth=2)
+        ax.plot(iterations, diameter, label='Diameter', marker='s', markersize=3, linewidth=2)
+        ax.set_xlabel('Iteration')
+        ax.set_ylabel('Length')
+        ax.set_title('Path Length Metrics (on Largest SCC)')
+        ax.legend()
+        ax.grid(True, alpha=0.3)
+        
+                    #--------------- 10. Clustering Coefficients ---------------
+        ax = axes[9]
+        global_clustering = [h['global_clustering'] for h in self.history]
+        avg_clustering = [h['avg_clustering'] for h in self.history]
+        ax.plot(iterations, global_clustering, label='Global', marker='o', markersize=3, linewidth=2)
+        ax.plot(iterations, avg_clustering, label='Average Local', marker='s', markersize=3, linewidth=2)
+        ax.set_xlabel('Iteration')
+        ax.set_ylabel('Clustering Coefficient')
+        ax.set_title('Clustering Coefficients')
+        ax.legend()
+        ax.grid(True, alpha=0.3)
+        
+                    #--------------- 11. Assortativity ---------------
+        ax = axes[10]
+        assortativity = [h['assortativity'] for h in self.history]
+        ax.plot(iterations, assortativity, color='brown', marker='o', markersize=3, linewidth=2)
+        ax.set_xlabel('Iteration')
+        ax.set_ylabel('Assortativity Coefficient')
+        ax.set_title('Degree Assortativity')
+        ax.grid(True, alpha=0.3)
+        ax.axhline(y=0, color='black', linestyle='--', alpha=0.5)
+        
+                    #--------------- 12. Attack and Recovery Activity ---------------
+        ax = axes[11]
+        nodes_attacked = [len(log) for log in self.attack_log]
+        nodes_recovered = [len(log) for log in self.recovery_log]
+        ax.bar(iterations, nodes_attacked, alpha=0.7, label='Attacked', color='red')
+        ax.bar(iterations, nodes_recovered, alpha=0.7, label='Recovered', color='green', bottom=0)
+        ax.set_xlabel('Iteration')
+        ax.set_ylabel('Number of Nodes')
+        ax.set_title('Attack vs Recovery Activity')
+        ax.legend()
+        ax.grid(True, alpha=0.3, axis='y')
+        
+        plt.tight_layout()
+        
+        if save_fig_path:
+            plt.savefig(save_fig_path, dpi=300, bbox_inches='tight')
+            print(f"Figure saved to {save_fig_path}")
+        
+        plt.show()
+        
+        # Summary statistics
+        print("\n---Simulation Summary---")
+        print(f"Initial nodes: {self.history[0]['num_nodes']}")
+        print(f"Final nodes: {self.history[-1]['num_nodes']}")
+        print(f"Initial edges: {self.history[0]['num_edges']}")
+        print(f"Final edges: {self.history[-1]['num_edges']}")
+        print(f"Total nodes attacked: {sum(len(log) for log in self.attack_log)}")
+        print(f"Total nodes recovered: {sum(len(log) for log in self.recovery_log)}")
+        print(f"Net nodes removed: {len(self.removed_nodes)}")
+        
     def run(self, num_of_iter: int=None):
         """ Run the simulation over the specified number of iterations. 
         At each iteration, perform an attack, measure the network state, and optionally perform recovery.
@@ -337,7 +511,7 @@ class NetworkAttackSimulation():
             
             
             # MEASURE
-            # self.measure_network_state()
+            self.measure_network_state()
             
             self.iterations_completed += 1
             # LOGGING
@@ -345,3 +519,6 @@ class NetworkAttackSimulation():
             print(f"  Removed nodes so far: {len(self.removed_nodes)}")
             print(f"  Attack log this iteration: {self.attack_log[-1]}")
             print(f"  Recovery log this iteration: {self.recovery_log[-1]}")
+
+        # PLOTS
+        self.plots()
