@@ -377,150 +377,166 @@ class NetworkAttackSimulation():
         return
 
   
-        
-    def plots(self, figsize=(16, 12), save_fig_path=None):
-        
+
+    def plots(self, figsize=(10, 6), save_fig_path=None):
+    
         if len(self.history) == 0:
             print("No simulation data to plot")
             return
         
-
         num_snapshots = len(self.history)
-
-
+        
         # We assume the first snapshot is iteration 0, last snapshot is the final iteration
         iterations = [
-             round(1 + i * (self.num_of_iter - 1) / (num_snapshots - 1)) for i in range(num_snapshots)
+            round(1 + i * (self.num_of_iter - 1) / (num_snapshots - 1)) for i in range(num_snapshots)
             ]
         
-        fig, axes = plt.subplots(4, 3, figsize=figsize)
-        fig.suptitle(f'Network Attack Simulation Results\n'
-                    f'Attack: {self.type_of_attack} | Recovery: {self.type_of_recovery} | '
-                    f'Metric: {self.metric}', 
-                    fontsize=14, fontweight='bold')
+        #store the figures
+        figures = {}
         
-        axes = axes.flatten()
-        
-                    #--------------- 1. Number of Nodes and Edges ---------------
-        ax = axes[0]
+        #--------------- 1. Number of Nodes ---------------
+        fig1, ax1 = plt.subplots(1, 1, figsize=figsize)
         num_nodes = [h['num_nodes'] for h in self.history]
+        
+        ax1.plot(iterations, num_nodes, color='blue', marker='o', markersize=4, linewidth=2)
+        ax1.set_xlabel('Iteration', fontsize=12)
+        ax1.set_ylabel('Number of Nodes', fontsize=12)
+        ax1.set_title(f'Number of Nodes Over Time\nAttack: {self.type_of_attack} | Recovery: {self.type_of_recovery}', 
+                    fontsize=13, fontweight='bold')
+        ax1.grid(True, alpha=0.3)
+        
+        plt.tight_layout()
+        
+        figures['nodes'] = fig1
+        
+            #--------------- 2. Number of Edges ---------------
+        fig2, ax2 = plt.subplots(1, 1, figsize=figsize)
         num_edges = [h['num_edges'] for h in self.history]
-        ax.plot(iterations, num_nodes, label='Nodes', marker='o', markersize=3, linewidth=2)
-        ax.plot(iterations, num_edges, label='Edges', marker='s', markersize=3, linewidth=2)
-        ax.set_xlabel('Iteration')
-        ax.set_ylabel('Count')
-        ax.set_title('Network Size Over Time')
-        ax.legend()
-        ax.grid(True, alpha=0.3)
         
-                    #--------------- 2. Average Degree ---------------
-        ax = axes[1]
-        avg_in_degree = [h['avg_in_degree'] for h in self.history]
-        avg_out_degree = [h['avg_out_degree'] for h in self.history]
-        ax.plot(iterations, avg_in_degree, label='In-Degree', marker='o', markersize=3, linewidth=2)
-        ax.plot(iterations, avg_out_degree, label='Out-Degree', marker='s', markersize=3, linewidth=2)
-        ax.set_xlabel('Iteration')
-        ax.set_ylabel('Average Degree')
-        ax.set_title('Average Node Degree')
-        ax.legend()
-        ax.grid(True, alpha=0.3)
+        ax2.plot(iterations, num_edges, color='red', marker='s', markersize=4, linewidth=2)
+        ax2.set_xlabel('Iteration', fontsize=12)
+        ax2.set_ylabel('Number of Edges', fontsize=12)
+        ax2.set_title(f'Number of Edges Over Time\nAttack: {self.type_of_attack} | Recovery: {self.type_of_recovery}', 
+                    fontsize=13, fontweight='bold')
+        ax2.grid(True, alpha=0.3)
         
-                    #--------------- 3. Density ---------------
-        ax = axes[2]
+        plt.tight_layout()
+        
+        figures['edges'] = fig2
+        
+        #--------------- 3. Density ---------------
+        fig3, ax3 = plt.subplots(1, 1, figsize=figsize)
         density = [h['density'] for h in self.history]
-        ax.plot(iterations, density, color='green', marker='o', markersize=3, linewidth=2)
-        ax.set_xlabel('Iteration')
-        ax.set_ylabel('Density')
-        ax.set_title('Network Density')
-        ax.grid(True, alpha=0.3)
+        ax3.plot(iterations, density, color='green', marker='o', markersize=4, linewidth=2)
+        ax3.set_xlabel('Iteration', fontsize=12)
+        ax3.set_ylabel('Density', fontsize=12)
+        ax3.set_title(f'Network Density\nAttack: {self.type_of_attack} | Recovery: {self.type_of_recovery}', 
+                    fontsize=13, fontweight='bold')
+        ax3.grid(True, alpha=0.3)
         
-                    #--------------- 4. Connected Components ---------------
-        ax = axes[3]
-        num_scc = [h['num_scc'] for h in self.history]
-        num_wcc = [h['num_wcc'] for h in self.history]
-        ax.plot(iterations, num_scc, label='Strongly Connected', marker='o', markersize=3, linewidth=2)
-        ax.plot(iterations, num_wcc, label='Weakly Connected', marker='s', markersize=3, linewidth=2)
-        ax.set_xlabel('Iteration')
-        ax.set_ylabel('Number of Components')
-        ax.set_title('Connected Components')
-        ax.legend()
-        ax.grid(True, alpha=0.3)
+        plt.tight_layout()
+       
+        figures['density'] = fig3
         
-                    # --------------- 5. Largest Component Size ---------------
-        ax = axes[4]
+        # --------------- 4. Largest Component Size ---------------
+        fig4, ax4 = plt.subplots(1, 1, figsize=figsize)
         size_largest_scc = [h['size_largest_scc'] for h in self.history]
         size_largest_wcc = [h['size_largest_wcc'] for h in self.history]
-        ax.plot(iterations, size_largest_scc, label='Largest SCC', marker='o', markersize=3, linewidth=2)
-        ax.plot(iterations, size_largest_wcc, label='Largest WCC', marker='s', markersize=3, linewidth=2)
-        ax.set_xlabel('Iteration')
-        ax.set_ylabel('Size')
-        ax.set_title('Largest Component Size')
-        ax.legend()
-        ax.grid(True, alpha=0.3)
+       
+        ax4.plot(iterations, size_largest_scc, label='Largest SCC', marker='o', markersize=4, linewidth=2)
+        ax4.plot(iterations, size_largest_wcc, label='Largest WCC', marker='s', markersize=4, linewidth=2)
+        ax4.set_xlabel('Iteration', fontsize=12)
+        ax4.set_ylabel('Size', fontsize=12)
+        ax4.set_title(f'Largest Component Size\nAttack: {self.type_of_attack} | Recovery: {self.type_of_recovery}', 
+                    fontsize=13, fontweight='bold')
+        ax4.legend(fontsize=11)
+        ax4.grid(True, alpha=0.3)
+       
+        plt.tight_layout()
         
-                    #--------------- 6. Average Centrality Measures ---------------
-        ax = axes[5]
+        figures['components'] = fig4
+        
+        #--------------- 5. Centrality Measures  ---------------
+        fig5, axes5 = plt.subplots(2, 2, figsize=(figsize[0]*1.5, figsize[1]*1.5))
+        fig5.suptitle(f'Average Centrality Measures\nAttack: {self.type_of_attack} | Recovery: {self.type_of_recovery}', 
+                    fontsize=14, fontweight='bold')
+        axes5 = axes5.flatten()
+        
         avg_betweenness = [h['avg_betweenness'] for h in self.history]
-        ax.plot(iterations, avg_betweenness, color='purple', marker='o', markersize=3, linewidth=2)
-        ax.set_xlabel('Iteration')
-        ax.set_ylabel('Average Betweenness')
-        ax.set_title('Average Betweenness Centrality')
-        ax.grid(True, alpha=0.3)
-        
-                    #--------------- 7. Closeness Centrality ---------------
-        ax = axes[6]
         avg_closeness = [h['avg_closeness'] for h in self.history]
-        ax.plot(iterations, avg_closeness, color='orange', marker='o', markersize=3, linewidth=2)
-        ax.set_xlabel('Iteration')
-        ax.set_ylabel('Average Closeness')
-        ax.set_title('Average Closeness Centrality')
-        ax.grid(True, alpha=0.3)
-        
-                    #--------------- 8. PageRank ---------------
-        ax = axes[7]
         avg_pagerank = [h['avg_pagerank'] for h in self.history]
-        ax.plot(iterations, avg_pagerank, color='red', marker='o', markersize=3, linewidth=2)
-        ax.set_xlabel('Iteration')
-        ax.set_ylabel('Average PageRank')
-        ax.set_title('Average PageRank')
-        ax.grid(True, alpha=0.3)
+        avg_harmonic = [h['avg_harmonic'] for h in self.history]
         
-                    #--------------- 9. Path Length Metrics ---------------
-        ax = axes[8]
+        # Betweenness
+        axes5[0].plot(iterations, avg_betweenness, color='purple', marker='o', markersize=4, linewidth=2)
+        axes5[0].set_xlabel('Iteration', fontsize=11)
+        axes5[0].set_ylabel('Average Betweenness', fontsize=11)
+        axes5[0].set_title('Betweenness Centrality', fontsize=12)
+        axes5[0].grid(True, alpha=0.3)
+        
+        # Closeness
+        axes5[1].plot(iterations, avg_closeness, color='orange', marker='s', markersize=4, linewidth=2)
+        axes5[1].set_xlabel('Iteration', fontsize=11)
+        axes5[1].set_ylabel('Average Closeness', fontsize=11)
+        axes5[1].set_title('Closeness Centrality', fontsize=12)
+        axes5[1].grid(True, alpha=0.3)
+        
+        # PageRank
+        axes5[2].plot(iterations, avg_pagerank, color='red', marker='^', markersize=4, linewidth=2)
+        axes5[2].set_xlabel('Iteration', fontsize=11)
+        axes5[2].set_ylabel('Average PageRank', fontsize=11)
+        axes5[2].set_title('PageRank Centrality', fontsize=12)
+        axes5[2].grid(True, alpha=0.3)
+        
+        # Harmonic
+        axes5[3].plot(iterations, avg_harmonic, color='green', marker='d', markersize=4, linewidth=2)
+        axes5[3].set_xlabel('Iteration', fontsize=11)
+        axes5[3].set_ylabel('Average Harmonic', fontsize=11)
+        axes5[3].set_title('Harmonic Centrality', fontsize=12)
+        axes5[3].grid(True, alpha=0.3)
+        
+        plt.tight_layout()
+        figures['centrality'] = fig5
+        
+        #--------------- 6. Path Length Metrics ---------------
+        fig6, ax6 = plt.subplots(1, 1, figsize=figsize)
         avg_shortest_path = [h['avg_shortest_path_length'] for h in self.history]
         diameter = [h['diameter'] for h in self.history]
-        ax.plot(iterations, avg_shortest_path, label='Avg Path Length', marker='o', markersize=3, linewidth=2)
-        ax.plot(iterations, diameter, label='Diameter', marker='s', markersize=3, linewidth=2)
-        ax.set_xlabel('Iteration')
-        ax.set_ylabel('Length')
-        ax.set_title('Path Length Metrics (on Largest SCC)')
-        ax.legend()
-        ax.grid(True, alpha=0.3)
         
-                    #--------------- 10. Clustering Coefficients ---------------
-        ax = axes[9]
+        ax6.plot(iterations, avg_shortest_path, label='Avg Path Length', marker='o', markersize=4, linewidth=2)
+        ax6.plot(iterations, diameter, label='Diameter', marker='s', markersize=4, linewidth=2)
+        ax6.set_xlabel('Iteration', fontsize=12)
+        ax6.set_ylabel('Length', fontsize=12)
+        ax6.set_title(f'Path Length Metrics (on Largest SCC)\nAttack: {self.type_of_attack} | Recovery: {self.type_of_recovery}', 
+                    fontsize=13, fontweight='bold')
+        ax6.legend(fontsize=11)
+        ax6.grid(True, alpha=0.3)
+       
+        plt.tight_layout()
+       
+        figures['path_length'] = fig6
+        
+        #--------------- 7. Clustering Coefficients ---------------
+        fig7, ax7 = plt.subplots(1, 1, figsize=figsize)
         global_clustering = [h['global_clustering'] for h in self.history]
         avg_clustering = [h['avg_clustering'] for h in self.history]
-        ax.plot(iterations, global_clustering, label='Global', marker='o', markersize=3, linewidth=2)
-        ax.plot(iterations, avg_clustering, label='Average Local', marker='s', markersize=3, linewidth=2)
-        ax.set_xlabel('Iteration')
-        ax.set_ylabel('Clustering Coefficient')
-        ax.set_title('Clustering Coefficients')
-        ax.legend()
-        ax.grid(True, alpha=0.3)
         
-                    #--------------- 11. Assortativity ---------------
-        ax = axes[10]
-        assortativity = [h['assortativity'] for h in self.history]
-        ax.plot(iterations, assortativity, color='brown', marker='o', markersize=3, linewidth=2)
-        ax.set_xlabel('Iteration')
-        ax.set_ylabel('Assortativity Coefficient')
-        ax.set_title('Degree Assortativity')
-        ax.grid(True, alpha=0.3)
-        ax.axhline(y=0, color='black', linestyle='--', alpha=0.5)
+        ax7.plot(iterations, global_clustering, label='Global', marker='o', markersize=4, linewidth=2)
+        ax7.plot(iterations, avg_clustering, label='Average Local', marker='s', markersize=4, linewidth=2)
+        ax7.set_xlabel('Iteration', fontsize=12)
+        ax7.set_ylabel('Clustering Coefficient', fontsize=12)
+        ax7.set_title(f'Clustering Coefficients\nAttack: {self.type_of_attack} | Recovery: {self.type_of_recovery}', 
+                    fontsize=13, fontweight='bold')
+        ax7.legend(fontsize=11)
+        ax7.grid(True, alpha=0.3)
         
-                    #--------------- 12. Attack and Recovery Activity ---------------
-                    
+        plt.tight_layout()
+        
+        figures['clustering'] = fig7
+        
+        #--------------- 8. Attack and Recovery Activity ---------------
+        fig8, ax8 = plt.subplots(1, 1, figsize=figsize)
+        
         num_snapshots = len(self.history)   
         metric_interval = self.num_of_iter // num_snapshots
 
@@ -546,31 +562,30 @@ class NetworkAttackSimulation():
             attacked_per_snapshot.append(attacked)
             recovered_per_snapshot.append(recovered)
 
-        ax = axes[11]
-        ax.bar(iterations, attacked_per_snapshot, alpha=0.7, label='Attacked', color='red')
-        ax.bar(iterations, recovered_per_snapshot, alpha=0.7, label='Recovered', color='green', bottom=0)
-        ax.set_xlabel('History Snapshot')
-        ax.set_ylabel('Number of Nodes')
-        ax.set_title('Attack vs Recovery Activity')
-        ax.legend()
-        ax.grid(True, alpha=0.3, axis='y')
-        
+        ax8.bar(iterations, attacked_per_snapshot, alpha=0.7, label='Attacked', color='red')
+        ax8.bar(iterations, recovered_per_snapshot, alpha=0.7, label='Recovered', color='green', bottom=0)
+        ax8.set_xlabel('Iteration', fontsize=12)
+        ax8.set_ylabel('Number of Nodes', fontsize=12)
+        ax8.set_title(f'Attack vs Recovery Activity\nAttack: {self.type_of_attack} | Recovery: {self.type_of_recovery}',
+                    fontsize=13, fontweight='bold')
+        ax8.legend(fontsize=11)
+        ax8.grid(True, alpha=0.3, axis='y')
+       
         plt.tight_layout()
+       
+        figures['activity'] = fig8
         
-        if save_fig_path:
-            plt.savefig(save_fig_path, dpi=300, bbox_inches='tight')
-            print(f"Figure saved to {save_fig_path}")
-        
+
         plt.show()
-        
+    
         # Summary statistics
         print("\n---Simulation Summary---")
         print(f"Initial nodes: {self.history[0]['num_nodes']}")
         print(f"Final nodes: {self.history[-1]['num_nodes']}")
         print(f"Initial edges: {self.history[0]['num_edges']}")
         print(f"Final edges: {self.history[-1]['num_edges']}")
-        print(f"Total nodes attacked: {sum(len(log["nodes"]) for log in self.attack_log)}")
-        print(f"Total nodes recovered: {sum(len(log["nodes"]) for log in self.recovery_log)}")
+        print(f"Total nodes attacked: {sum(len(log['nodes']) for log in self.attack_log)}")
+        print(f"Total nodes recovered: {sum(len(log['nodes']) for log in self.recovery_log)}")
         print(f"Net nodes removed: {len(self.removed_nodes)}")
     
     #-----LOGGING AND RUNNING SIMULATION-----
