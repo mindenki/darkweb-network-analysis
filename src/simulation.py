@@ -26,7 +26,7 @@ class NetworkAttackSimulation():
                  recovery_scale: float=10,
                  recovery_prob: float=0.01,
                  recovery_edge_type: str="realistic",
-                 recovery_edge_probability: float=0.01,
+                 recovery_edge_probability: float=0.001,
                  recovery_interval: int = 1,
                  metric_interval: int = 1
                  ):
@@ -180,6 +180,7 @@ class NetworkAttackSimulation():
                     if nbr in self.graph:
                         self.graph.add_edge(nbr, node)
                         recovered_in_edges.append((nbr, node))
+                        
         elif recover_type == "random":
             # add random edges uniformly with a small probability
             possible_neighbors = [n for n in self.graph.nodes if n != node]
@@ -239,18 +240,17 @@ class NetworkAttackSimulation():
             weights = nx.harmonic_centrality(Go)
         elif metric == "in_degree":
             weights = dict(Go.in_degree())
-            normalized_weights = np.array(list(weights.values()))
-            normalized_weights = normalized_weights / normalized_weights.sum()
-            weights = dict(zip(weights.keys(), normalized_weights))
         elif metric == "out_degree":
             weights = dict(Go.out_degree())
-            normalized_weights = np.array(list(weights.values()))
-            normalized_weights = normalized_weights / normalized_weights.sum()
-            weights = dict(zip(weights.keys(), normalized_weights))
         else:
             raise ValueError("Invalid metric")
         
+        #normalization
+        normalized_weights = np.array(list(weights.values()))
+        normalized_weights = normalized_weights / normalized_weights.sum()
+        weights = dict(zip(weights.keys(), normalized_weights))
         all_removed = list(self.removed_nodes)
+        
         #since the weights are already between 0 and 1 and they sum up to 1, we can just use them directly
         metric_probs = np.array([weights[n] for n in all_removed])
 
