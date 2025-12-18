@@ -5,6 +5,15 @@ import copy
 from typing import Literal
 import matplotlib.pyplot as plt
 import numpy as np
+import logging
+
+logger = logging.getLogger("NetworkAttackSimulation")
+logger.setLevel(logging.DEBUG)
+
+ch = logging.StreamHandler()
+formatter = logging.Formatter("%(asctime)s - %(levelname)s - %(message)s")
+ch.setFormatter(formatter)
+logger.addHandler(ch)
 
 class NetworkAttackSimulation():
     def __init__(self, 
@@ -13,28 +22,45 @@ class NetworkAttackSimulation():
                  type_of_recovery:str = 'uniform', 
                  num_of_iter: int=100, 
                  metric: str="pagerank", 
-                 random_seed: int=42,
+                 random_seed: int= None,
                  recovery_scale: float=10,
-                 recovery_prob: float=0.01
+                 recovery_prob: float=0.01,
+                 recovery_edge_type: str="realistic",
+                 recovery_edge_probability: float=0.01,
+                 recovery_interval: int = 1,
+                 metric_interval: int = 1
                  ):
-        
+        #graph
         self.graph = graph
+        self.original_graph: nx.DiGraph = copy.deepcopy(self.graph)
+        # attack
         self.type_of_attack = type_of_attack
+        # recovery
         self.type_of_recovery = type_of_recovery
-        self.num_of_iter = num_of_iter
-        self.metric = metric
         self.recovery_scale = recovery_scale
         self.recovery_prob = recovery_prob
-        self.random_seed = random_seed
+        self.recovery_edge_type: str = recovery_edge_type
+        self.recovery_edge_probability: float = recovery_edge_probability
+        self.recovery_interval: int = recovery_interval
+        
+        # logs
         self.history:list[dict] = []
         self.change_history:list[dict] = []
-        self.attack_log: list[list] = []
-        self.recovery_log: list[list] = []
+        self.attack_log: list[dict] = []
+        self.recovery_log: list[dict] = []
         self.removed_nodes: set = set()
-        self.original_graph: nx.DiGraph = copy.deepcopy(self.graph)
-        self.recovery_edge_probability: float = 0.001
+        
+        # misc
+        self.num_of_iter = num_of_iter
+        self.metric = metric
+        self.metric_interval = metric_interval
+        self.random_seed = random_seed or random.randint(0, 100000)
         self.iterations_completed: int = 0
+    
+        
+        # set random seed
         np.random.seed(self.random_seed)
+        random.seed(self.random_seed)
     
     def reset(self):
         """ Reset the simulation to its initial state."""
@@ -42,30 +68,41 @@ class NetworkAttackSimulation():
         self.graph = copy.deepcopy(self.original_graph)
         
         # clear the logs
-        self.history = []
-        self.change_history = []
-        self.attack_log = []
-        self.recovery_log = []
-        self.removed_nodes = set()
-        
+        self.history.clear()
+        self.change_history.clear()
+        self.attack_log.clear()
+        self.recovery_log.clear()
+        self.removed_nodes.clear()
+
         # reseed just in case
         np.random.seed(self.random_seed)
+        random.seed(self.random_seed)
         
+        logger.info("Simulation reset to initial state.")
+        
+    
+    # -----ATTACKS-----
+    
+    
     def random_attack(self):
         nodes = list(self.graph.nodes) 
         if not nodes:
+            self.attack_log.append({"iteration": self.iterations_completed, "nodes": []})
             return
         node = random.choice(nodes)
         self.graph.remove_node(node)
-        self.attack_log.append([node])
         self.removed_nodes.add(node)
+        
+        self.attack_log.append({"iteration": self.iterations_completed, "nodes": [node]})
+        logger.debug("Random attack removed node: %s", node)
+        
 
     def targeted_attack(self, metric: Literal["betweenness", "closeness", "in_degree", "out_degree", "pagerank", "harmonic"] = 'harmonic', num_nodes_to_remove: int = 1):
         
         G = self.graph
         
         if G.number_of_nodes() == 0:
-            self.attack_log.append([])
+            self.attack_log.append({"iteration": self.iterations_completed, "nodes": []})
             return
         
         dict_metric = {
@@ -99,10 +136,146 @@ class NetworkAttackSimulation():
                 G.remove_node(node)
                 self.removed_nodes.add(node)
         
-        self.attack_log.append(nodes_to_remove)
+        self.attack_log.append({"iteration": self.iterations_completed, "nodes": nodes_to_remove})
+        logger.debug("Targeted attack removed nodes %s by metric %s", nodes_to_remove, metric)
         
         return
 
+
+    # -----RECOVERY-----
+    
+    def recover_edges(self, node, recover_type):
+        """ Recover edges for a given node based on different strategies."""
+        
+        recovered_in_edges = []
+        recovered_out_edges = []
+        
+        if recover_type not in ["realistic", "original", "random", "none"]:
+            raise ValueError("Invalid recover_type. Choose 'original' or 'random'.")
+        
+        if recover_type == "realistic":
+            # add all outgoing edges from original graph and some random incoming edges
+            if node in self.original_graph:
+                for _, nbr in self.original_graph.out_edges(node):
+                    if nbr in self.graph:
+                        self.graph.add_edge(node, nbr)
+                        recovered_out_edges.append((node, nbr))
+                        
+                # add some random incoming edges from the original graph
+                for _, nbr in self.original_graph.in_edges(node):
+                    if nbr in self.graph:
+                        # 10% chance to readd each incoming edge
+                        if np.random.rand() < 0.1:
+                            self.graph.add_edge(nbr, node)
+                            recovered_in_edges.append((nbr, node))
+        elif recover_type == "original":
+            # re-add all edges from original graph
+            if node in self.original_graph:
+                for _, nbr in self.original_graph.out_edges(node):
+                    if nbr in self.graph:
+                        self.graph.add_edge(node, nbr)
+                        recovered_out_edges.append((node, nbr))
+                
+                for nbr, _ in self.original_graph.in_edges(node):
+                    if nbr in self.graph:
+                        self.graph.add_edge(nbr, node)
+                        recovered_in_edges.append((nbr, node))
+        elif recover_type == "random":
+            # add random edges uniformly with a small probability
+            possible_neighbors = [n for n in self.graph.nodes if n != node]
+
+            # 1) Random OUTGOING edges:
+            for nbr in possible_neighbors:
+                if np.random.rand() < self.recovery_edge_probability :
+                    self.graph.add_edge(node, nbr)
+                    recovered_out_edges.append((node, nbr))
+            # 2) Random INCOMING edges:
+            for nbr in possible_neighbors:
+                if np.random.rand() < self.recovery_edge_probability :
+                    self.graph.add_edge(nbr, node)
+                    recovered_in_edges.append((nbr, node))
+        
+        logger.debug("Recovered %d outgoing edges and %d incoming edges for node %s using %s",
+                     len(recovered_out_edges), len(recovered_in_edges), node, recover_type)
+            
+
+    def uniform_recovery(self):
+        recovered_this_iter = []
+        still_removed = set()
+        for node in self.removed_nodes:
+            if random.random() < self.recovery_prob: # removed node has a probabibility to be brought back.
+                self.graph.add_node(node)
+                self.recover_edges(node, self.recovery_edge_type)
+                recovered_this_iter.append(node)
+            else:
+                still_removed.add(node)
+        self.removed_nodes = still_removed
+        self.recovery_log.append({"iteration": self.iterations_completed, "nodes": recovered_this_iter})
+        logger.debug("Uniform recovery recovered nodes %s", recovered_this_iter)
+        
+        
+    def weighted_recovery(self, metric):
+        """
+        Perform weighted recovery of removed nodes.
+        Each removed node has a comeback probability weighted by a centrality metric.
+
+        """
+        G = self.graph
+        Go = self.original_graph
+        
+        # No removed nodes → nothing to do
+        if len(self.removed_nodes) == 0:
+            self.recovery_log.append({"iteration": self.iterations_completed, "nodes": []})
+            return
+        
+        # Compute metric weights
+        if metric == "pagerank":
+            weights = nx.pagerank(Go)
+        elif metric == "betweenness":
+            weights = nx.betweenness_centrality(Go)
+        elif metric == "closeness":
+            weights = nx.closeness_centrality(Go)
+        elif metric == "harmonic":
+            weights = nx.harmonic_centrality(Go)
+        elif metric == "in_degree":
+            weights = dict(Go.in_degree())
+            normalized_weights = np.array(list(weights.values()))
+            normalized_weights = normalized_weights / normalized_weights.sum()
+            weights = dict(zip(weights.keys(), normalized_weights))
+        elif metric == "out_degree":
+            weights = dict(Go.out_degree())
+            normalized_weights = np.array(list(weights.values()))
+            normalized_weights = normalized_weights / normalized_weights.sum()
+            weights = dict(zip(weights.keys(), normalized_weights))
+        else:
+            raise ValueError("Invalid metric")
+        
+        all_removed = list(self.removed_nodes)
+        #since the weights are already between 0 and 1 and they sum up to 1, we can just use them directly
+        metric_probs = np.array([weights[n] for n in all_removed])
+
+        # final probability 
+        final_probs = self.recovery_scale * metric_probs
+        
+        # Sample which nodes return
+        recovered_nodes = [
+            node for node, p in zip(all_removed, final_probs)
+            if np.random.rand() < p
+        ]
+        
+        # Re-add recovered nodes
+        for node in recovered_nodes:
+            if not G.has_node(node):
+                G.add_node(node)
+                self.recover_edges(node, self.recovery_edge_type)
+            self.removed_nodes.discard(node)
+        
+        # Log this iteration
+        self.recovery_log.append({"iteration": self.iterations_completed, "nodes": recovered_nodes})
+        logger.debug("Weighted recovery recovered nodes %s", recovered_nodes)
+
+   
+    # ----MEASUREMENT AND PLOTTING-----
     def measure_network_state(self):
         """
         Compute a set of structural network metrics for the current graph state.
@@ -203,119 +376,22 @@ class NetworkAttackSimulation():
         
         return
 
-    def uniform_recovery(self):
-        recovered_this_iter = []
-        still_removed = set()
-        for node in self.removed_nodes:
-            if random.random() < self.recovery_prob: # removed node has a high probabibility to be brought back.
-                self.graph.add_node(node)
-                # if self.graph.number_of_nodes() > 1: # creating new edges
-                #     target = random.choice(list(self.graph.nodes)) # randomly choooses nodes in the edge to connect to (maybe connect to higher degree nodes, centrality.)
-                #     if target != node:
-                #         self.graph.add_edge(node, target) # forms new edges
-                recovered_this_iter.append(node)
-            else:
-                still_removed.add(node)
-        self.removed_nodes = still_removed | self.removed_nodes
-        self.recovery_log.append(recovered_this_iter)
-
-    
   
-    def weighted_recovery(self, metric):
-        """
-        Perform weighted recovery of removed nodes.
-        Each removed node has a comeback probability weighted by a centrality metric.
-
-        """
-        G = self.graph
-        Go = self.original_graph
         
-        # No removed nodes → nothing to do
-        if len(self.removed_nodes) == 0:
-            self.recovery_log.append([])
-            return
-        
-        # Compute metric weights
-        if metric == "pagerank":
-            weights = nx.pagerank(Go)
-        elif metric == "betweenness":
-            weights = nx.betweenness_centrality(Go)
-        elif metric == "closeness":
-            weights = nx.closeness_centrality(Go)
-        elif metric == "harmonic":
-            weights = nx.harmonic_centrality(Go)
-        elif metric == "in_degree":
-            weights = dict(Go.in_degree())
-            normalized_weights = np.array(list(weights.values()))
-            normalized_weights = normalized_weights / normalized_weights.sum()
-            weights = dict(zip(weights.keys(), normalized_weights))
-        elif metric == "out_degree":
-            weights = dict(Go.out_degree())
-            normalized_weights = np.array(list(weights.values()))
-            normalized_weights = normalized_weights / normalized_weights.sum()
-            weights = dict(zip(weights.keys(), normalized_weights))
-        else:
-            raise ValueError("Invalid metric")
-        
-        all_removed = list(self.removed_nodes)
-        #since the weights are already between 0 and 1 and they sum up to 1, we can just use them directly
-        metric_probs = np.array([weights[n] for n in all_removed])
-
-        # final probability 
-        final_probs = self.recovery_scale * metric_probs
-        
-        # Sample which nodes return
-        recovered_nodes = [
-            node for node, p in zip(all_removed, final_probs)
-            if np.random.rand() < p
-        ]
-        
-        # Re-add recovered nodes
-        for node in recovered_nodes:
-            if not G.has_node(node):
-                G.add_node(node)
-            
-        #------------------------This part is not yet decided---------------------------------
-        
-            # re-add outgoing edges from original graph
-            if node in self.original_graph:
-                for _, nbr, data in self.original_graph.out_edges(node, data=True):
-                    if nbr in self.graph:
-                        self.graph.add_edge(node, nbr, **data)
-                
-                # re-add incoming edges
-                for nbr, _, data in self.original_graph.in_edges(node, data=True):
-                    if nbr in self.graph:
-                        self.graph.add_edge(nbr, node, **data)
-        #-------------------------------------------------------------------------------------              
-            
-            # Add random edges uniformly with a small probability
-                # edge_prob = self.recovery_edge_probability 
-                # possible_neighbors = [n for n in self.G.nodes if n != node]
-
-                # # 1) Random OUTGOING edges:
-                # for nbr in possible_neighbors:
-                #     if np.random.rand() < edge_prob:
-                #         self.G.add_edge(node, nbr)
-
-                # # 2) Random INCOMING edges:
-                # for nbr in possible_neighbors:
-                #     if np.random.rand() < edge_prob:
-                #         self.G.add_edge(nbr, node)
-        #-------------------------------------------------------------------------------------
-                # remove from removed set
-                self.removed_nodes.discard(node)
-        
-        # Log this iteration
-        self.recovery_log.append(recovered_nodes)
-
     def plots(self, figsize=(16, 12), save_fig_path=None):
         
         if len(self.history) == 0:
             print("No simulation data to plot")
             return
         
-        iterations = range(len(self.history))
+
+        num_snapshots = len(self.history)
+
+
+        # We assume the first snapshot is iteration 0, last snapshot is the final iteration
+        iterations = [
+             round(1 + i * (self.num_of_iter - 1) / (num_snapshots - 1)) for i in range(num_snapshots)
+            ]
         
         fig, axes = plt.subplots(4, 3, figsize=figsize)
         fig.suptitle(f'Network Attack Simulation Results\n'
@@ -444,12 +520,36 @@ class NetworkAttackSimulation():
         ax.axhline(y=0, color='black', linestyle='--', alpha=0.5)
         
                     #--------------- 12. Attack and Recovery Activity ---------------
+                    
+        num_snapshots = len(self.history)   
+        metric_interval = self.num_of_iter // num_snapshots
+
+        attacked_per_snapshot = []
+        recovered_per_snapshot = []
+
+        for i in range(num_snapshots):
+            start_iter = i * metric_interval
+            end_iter = (i + 1) * metric_interval
+            
+            attacked = sum(
+                len(log["nodes"])
+                for log in self.attack_log
+                if start_iter <= log.get("iteration", 0) < end_iter
+            )
+            
+            recovered = sum(
+                len(log["nodes"])
+                for log in self.recovery_log
+                if start_iter <= log.get("iteration", 0) < end_iter
+            )
+            
+            attacked_per_snapshot.append(attacked)
+            recovered_per_snapshot.append(recovered)
+
         ax = axes[11]
-        nodes_attacked = [len(log) for log in self.attack_log]
-        nodes_recovered = [len(log) for log in self.recovery_log]
-        ax.bar(iterations, nodes_attacked, alpha=0.7, label='Attacked', color='red')
-        ax.bar(iterations, nodes_recovered, alpha=0.7, label='Recovered', color='green', bottom=0)
-        ax.set_xlabel('Iteration')
+        ax.bar(iterations, attacked_per_snapshot, alpha=0.7, label='Attacked', color='red')
+        ax.bar(iterations, recovered_per_snapshot, alpha=0.7, label='Recovered', color='green', bottom=0)
+        ax.set_xlabel('History Snapshot')
         ax.set_ylabel('Number of Nodes')
         ax.set_title('Attack vs Recovery Activity')
         ax.legend()
@@ -469,9 +569,27 @@ class NetworkAttackSimulation():
         print(f"Final nodes: {self.history[-1]['num_nodes']}")
         print(f"Initial edges: {self.history[0]['num_edges']}")
         print(f"Final edges: {self.history[-1]['num_edges']}")
-        print(f"Total nodes attacked: {sum(len(log) for log in self.attack_log)}")
-        print(f"Total nodes recovered: {sum(len(log) for log in self.recovery_log)}")
+        print(f"Total nodes attacked: {sum(len(log["nodes"]) for log in self.attack_log)}")
+        print(f"Total nodes recovered: {sum(len(log["nodes"]) for log in self.recovery_log)}")
         print(f"Net nodes removed: {len(self.removed_nodes)}")
+    
+    #-----LOGGING AND RUNNING SIMULATION-----
+    
+    def log_iteration_summary(self):
+        """ Log a summary of the current iteration's state."""
+        recover_bool = 0
+        if (self.iterations_completed - 1) % self.recovery_interval == 0:
+            recover_bool = 1
+        logger.info(
+            "Iteration %d | nodes=%d edges=%d removed=%d attacked=%d recovered=%d",
+            self.iterations_completed,
+            self.graph.number_of_nodes(),
+            self.graph.number_of_edges(),
+            len(self.removed_nodes),
+            len(self.attack_log[-1]["nodes"]) if self.attack_log else 0,
+            len(self.recovery_log[-1]["nodes"]) if self.recovery_log and recover_bool else 0
+        )
+        
         
     def run(self, num_of_iter: int=None):
         """ Run the simulation over the specified number of iterations. 
@@ -479,17 +597,13 @@ class NetworkAttackSimulation():
         """
         
         
-        self.reset() # maybe not needed
-        
-        
-        if num_of_iter is not None:
-            self.num_of_iter = num_of_iter
-            
+        self.reset() 
         
         # main loop
         for i in range(self.num_of_iter):
-            
-            
+            self.iterations_completed = i + 1
+            logger.info("Starting iteration %d/%d...", self.iterations_completed, self.num_of_iter)
+
             # ATTACK
             if self.type_of_attack == "random":
                 self.random_attack()
@@ -499,26 +613,30 @@ class NetworkAttackSimulation():
                 raise ValueError(f"Unknown attack type: {self.type_of_attack}")
             
         
-            
             # RECOVERY
-            if self.type_of_recovery == "uniform":
-                self.uniform_recovery()
-            elif self.type_of_recovery == "weighted":
-                if self.recovery_prob is None:
-                    raise ValueError("recovery_prob must be set for weighted recovery")
-                self.weighted_recovery(metric=self.metric)
-            
+            if i % self.recovery_interval == 0:
+                if self.type_of_recovery == "uniform":
+                    self.uniform_recovery()
+                elif self.type_of_recovery == "weighted":
+                    self.weighted_recovery(metric=self.metric)
+                elif self.type_of_recovery == "none":
+                    self.recovery_log.append({"iteration": i, "nodes": []})
             
             
             # MEASURE
-            self.measure_network_state()
-            
-            self.iterations_completed += 1
+            if i % self.metric_interval == 0:
+                 self.measure_network_state()
+    
             # LOGGING
-            print(f"Iteration {i+1}/{self.num_of_iter}: Nodes: {self.graph.number_of_nodes()}, Edges: {self.graph.number_of_edges()}")
-            print(f"  Removed nodes so far: {len(self.removed_nodes)}")
-            print(f"  Attack log this iteration: {self.attack_log[-1]}")
-            print(f"  Recovery log this iteration: {self.recovery_log[-1]}")
+            self.log_iteration_summary()
 
+
+        logger.info("Simulation completed after %d iterations.", self.num_of_iter)
+        logger.info("Final network state: nodes=%d edges=%d removed_nodes=%d removed_edges=%d", 
+                    self.graph.number_of_nodes(), self.graph.number_of_edges(), 
+                    self.original_graph.number_of_nodes()-self.graph.number_of_nodes(), 
+                    self.original_graph.number_of_edges()-self.graph.number_of_edges(),)
         # PLOTS
         self.plots()
+        
+        
