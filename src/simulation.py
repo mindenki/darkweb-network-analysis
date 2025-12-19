@@ -16,6 +16,49 @@ ch.setFormatter(formatter)
 logger.addHandler(ch)
 
 class NetworkAttackSimulation():
+    """
+    Class for modeling attack and recovery processes on directed networks.
+
+    Parameters:
+    ------------
+
+    graph: nx.DiGraph
+        The original graph to be attacked and recovered.
+    
+    type_of_attack: Literal['random', 'targeted'], default(random)
+        The type of attack to be used.
+
+    type_of_recovery: Literal['uniform', 'random', 'realistic'], default(uniform)
+        The type of recovery to be used.
+
+    num_of_iter: int, default(100)
+        The number of iterations to run the simulation.
+    
+    metric: Literal['betweenness', 'closeness', 'in_degree', 'out_degree', 'pagerank', 'harmonic'], default(pagerank)
+        The metric to use for the attack.
+    
+    random_seed: int | None, default(None)
+        The random seed to use for the simulation.
+    
+    recovery_scale: float, default(10)
+        The scale of the recovery process.
+    
+    recovery_prob: float, default(0.01)
+        The probability of recovery.
+    
+    recovery_edge_type: Literal['uniform', 'random', 'realistic'], default(realistic)
+        The type of recovery edge to use.
+    
+    recovery_edge_probability: float, default(0.001)
+        The probability of recovery edge.
+
+    recovery_interval: int, default(1)
+        The interval at which to perform recovery.
+
+    metric_interval: int, default(1)
+        The interval at which to compute the metric each time.
+    """
+
     def __init__(self, 
                  graph: nx.DiGraph, 
                  type_of_attack: str="random", 
