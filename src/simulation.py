@@ -1,11 +1,12 @@
 import networkx as nx
-import numpy as np
 import random
 import copy
 from typing import Literal
 import matplotlib.pyplot as plt
 import numpy as np
 import logging
+import os
+from tqdm import tqdm
 
 logger = logging.getLogger("NetworkAttackSimulation")
 logger.setLevel(logging.DEBUG)
@@ -194,7 +195,7 @@ class NetworkAttackSimulation():
         recovered_out_edges = []
         
         if recover_type not in ["realistic", "original", "random", "none"]:
-            raise ValueError("Invalid recover_type. Choose 'original' or 'random'.")
+            raise ValueError("Invalid recover_type. Choose from 'realistic', 'original', 'random', 'none'.")
         
         if recover_type == "realistic":
             # add all outgoing edges from original graph and some random incoming edges
@@ -421,8 +422,8 @@ class NetworkAttackSimulation():
 
   
 
-    def plots(self, figsize=(10, 6), save_fig_path=None):
-    
+    def plots(self, figsize=(10, 6), save_fig_path='results/sim_results'):
+        
         if len(self.history) == 0:
             print("No simulation data to plot")
             return
@@ -434,8 +435,8 @@ class NetworkAttackSimulation():
             round(1 + i * (self.num_of_iter - 1) / (num_snapshots - 1)) for i in range(num_snapshots)
             ]
         
-        #store the figures
-        figures = {}
+        if save_fig_path:
+            os.makedirs(save_fig_path, exist_ok=True)
         
         #--------------- 1. Number of Nodes ---------------
         fig1, ax1 = plt.subplots(1, 1, figsize=figsize)
@@ -450,9 +451,10 @@ class NetworkAttackSimulation():
         
         plt.tight_layout()
         
-        figures['nodes'] = fig1
-        
-            #--------------- 2. Number of Edges ---------------
+        if save_fig_path:
+            fig1.savefig(os.path.join(save_fig_path, "nodes.png"), dpi=300, bbox_inches='tight')
+
+        #--------------- 2. Number of Edges ---------------
         fig2, ax2 = plt.subplots(1, 1, figsize=figsize)
         num_edges = [h['num_edges'] for h in self.history]
         
@@ -464,8 +466,10 @@ class NetworkAttackSimulation():
         ax2.grid(True, alpha=0.3)
         
         plt.tight_layout()
-        
-        figures['edges'] = fig2
+    
+        if save_fig_path:
+            fig2.savefig(os.path.join(save_fig_path, "edges.png"), dpi=300, bbox_inches='tight')
+
         
         #--------------- 3. Density ---------------
         fig3, ax3 = plt.subplots(1, 1, figsize=figsize)
@@ -478,14 +482,16 @@ class NetworkAttackSimulation():
         ax3.grid(True, alpha=0.3)
         
         plt.tight_layout()
-       
-        figures['density'] = fig3
+        
+        if save_fig_path:
+            fig3.savefig(os.path.join(save_fig_path, "density.png"), dpi=300, bbox_inches='tight')
+
         
         # --------------- 4. Largest Component Size ---------------
         fig4, ax4 = plt.subplots(1, 1, figsize=figsize)
         size_largest_scc = [h['size_largest_scc'] for h in self.history]
         size_largest_wcc = [h['size_largest_wcc'] for h in self.history]
-       
+    
         ax4.plot(iterations, size_largest_scc, label='Largest SCC', marker='o', markersize=4, linewidth=2)
         ax4.plot(iterations, size_largest_wcc, label='Largest WCC', marker='s', markersize=4, linewidth=2)
         ax4.set_xlabel('Iteration', fontsize=12)
@@ -494,12 +500,14 @@ class NetworkAttackSimulation():
                     fontsize=13, fontweight='bold')
         ax4.legend(fontsize=11)
         ax4.grid(True, alpha=0.3)
-       
+    
         plt.tight_layout()
         
-        figures['components'] = fig4
+        if save_fig_path:
+            fig4.savefig(os.path.join(save_fig_path, "components.png"), dpi=300, bbox_inches='tight')
+
         
-        #--------------- 5. Centrality Measures  ---------------
+        #--------------- 5. Centrality Measures ---------------
         fig5, axes5 = plt.subplots(2, 2, figsize=(figsize[0]*1.5, figsize[1]*1.5))
         fig5.suptitle(f'Average Centrality Measures\nAttack: {self.type_of_attack} | Recovery: {self.type_of_recovery}', 
                     fontsize=14, fontweight='bold')
@@ -539,8 +547,11 @@ class NetworkAttackSimulation():
         axes5[3].grid(True, alpha=0.3)
         
         plt.tight_layout()
-        figures['centrality'] = fig5
         
+        if save_fig_path:
+            fig5.savefig(os.path.join(save_fig_path, "centrality.png"), dpi=300, bbox_inches='tight')
+
+
         #--------------- 6. Path Length Metrics ---------------
         fig6, ax6 = plt.subplots(1, 1, figsize=figsize)
         avg_shortest_path = [h['avg_shortest_path_length'] for h in self.history]
@@ -554,11 +565,13 @@ class NetworkAttackSimulation():
                     fontsize=13, fontweight='bold')
         ax6.legend(fontsize=11)
         ax6.grid(True, alpha=0.3)
-       
+    
         plt.tight_layout()
-       
-        figures['path_length'] = fig6
         
+        if save_fig_path:
+            fig6.savefig(os.path.join(save_fig_path, "path_length.png"), dpi=300, bbox_inches='tight')
+
+
         #--------------- 7. Clustering Coefficients ---------------
         fig7, ax7 = plt.subplots(1, 1, figsize=figsize)
         global_clustering = [h['global_clustering'] for h in self.history]
@@ -575,13 +588,15 @@ class NetworkAttackSimulation():
         
         plt.tight_layout()
         
-        figures['clustering'] = fig7
-        
+        if save_fig_path:
+            fig7.savefig(os.path.join(save_fig_path, "clustering.png"), dpi=300, bbox_inches='tight')
+
+
         #--------------- 8. Attack and Recovery Activity ---------------
         fig8, ax8 = plt.subplots(1, 1, figsize=figsize)
         
         num_snapshots = len(self.history)   
-        metric_interval = self.num_of_iter // num_snapshots
+        metric_interval = max(1, self.num_of_iter // num_snapshots)
 
         attacked_per_snapshot = []
         recovered_per_snapshot = []
@@ -613,14 +628,17 @@ class NetworkAttackSimulation():
                     fontsize=13, fontweight='bold')
         ax8.legend(fontsize=11)
         ax8.grid(True, alpha=0.3, axis='y')
-       
-        plt.tight_layout()
-       
-        figures['activity'] = fig8
-        
-
-        plt.show()
     
+        plt.tight_layout()
+
+        if save_fig_path:
+            fig8.savefig(os.path.join(save_fig_path, "activity.png"), dpi=300, bbox_inches='tight')
+        
+        print(f"\nAll figures saved in directory: {save_fig_path}")
+
+        
+        plt.show()
+
         # Summary statistics
         print("\n---Simulation Summary---")
         print(f"Initial nodes: {self.history[0]['num_nodes']}")
@@ -649,16 +667,16 @@ class NetworkAttackSimulation():
         )
         
         
-    def run(self, num_of_iter: int=None):
+    def run(self):
         """ Run the simulation over the specified number of iterations. 
         At each iteration, perform an attack, measure the network state, and optionally perform recovery.
         """
         
-        
         self.reset() 
         
         # main loop
-        for i in range(self.num_of_iter):
+        for i in tqdm(range(self.num_of_iter), desc="Running network simulation", unit="iter",smoothing=0.1):
+
             self.iterations_completed = i + 1
             logger.info("Starting iteration %d/%d...", self.iterations_completed, self.num_of_iter)
 
