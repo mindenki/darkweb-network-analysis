@@ -669,7 +669,8 @@ class NetworkAttackSimulation():
                     self.weighted_recovery(metric=self.metric)
                 elif self.type_of_recovery == "none":
                     self.recovery_log.append({"iteration": i, "nodes": []})
-            
+                else:
+                    raise ValueError(f"Unknown attack type: {self.type_of_attack}")
             
             # MEASURE
             if i % self.metric_interval == 0:
