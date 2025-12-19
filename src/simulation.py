@@ -670,7 +670,7 @@ class NetworkAttackSimulation():
                 elif self.type_of_recovery == "none":
                     self.recovery_log.append({"iteration": i, "nodes": []})
                 else:
-                    raise ValueError(f"Unknown attack type: {self.type_of_attack}")
+                    raise ValueError(f"Unknown recovery type: {self.type_of_recovery}")
             
             # MEASURE
             if i % self.metric_interval == 0:
