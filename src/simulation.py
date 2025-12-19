@@ -7,6 +7,7 @@ import numpy as np
 import logging
 import os
 from tqdm import tqdm
+from datetime import datetime
 
 logger = logging.getLogger("NetworkAttackSimulation")
 logger.setLevel(logging.DEBUG)
@@ -422,7 +423,7 @@ class NetworkAttackSimulation():
 
   
 
-    def plots(self, figsize=(10, 6), save_fig_path='results/sim_results'):
+    def plots(self, figsize=(10, 6), save_fig_path='../results/sim_results'):
         
         if len(self.history) == 0:
             print("No simulation data to plot")
@@ -435,8 +436,21 @@ class NetworkAttackSimulation():
             round(1 + i * (self.num_of_iter - 1) / (num_snapshots - 1)) for i in range(num_snapshots)
             ]
         
-        if save_fig_path:
-            os.makedirs(save_fig_path, exist_ok=True)
+        if not os.path.exists(save_fig_path):
+            raise FileNotFoundError(f"The folder '{save_fig_path}' does not exist. Cannot save figures.")
+        
+        # Unique subfolder name based on time + parameters
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        folder_name = f"{timestamp}_{self.type_of_attack}_{self.type_of_recovery}"
+        
+        # Update the save path to be inside this new folder
+        full_save_path = os.path.join(save_fig_path, folder_name)
+
+        # Create this specific directory
+        if not os.path.exists(full_save_path):
+            os.makedirs(full_save_path, exist_ok=True)
+            print(f"Created new directory for this run: {full_save_path}")
+
         
         #--------------- 1. Number of Nodes ---------------
         fig1, ax1 = plt.subplots(1, 1, figsize=figsize)
@@ -451,8 +465,8 @@ class NetworkAttackSimulation():
         
         plt.tight_layout()
         
-        if save_fig_path:
-            fig1.savefig(os.path.join(save_fig_path, "nodes.png"), dpi=300, bbox_inches='tight')
+        if full_save_path:
+            fig1.savefig(os.path.join(full_save_path, "nodes.png"), dpi=300, bbox_inches='tight')
 
         #--------------- 2. Number of Edges ---------------
         fig2, ax2 = plt.subplots(1, 1, figsize=figsize)
@@ -467,8 +481,8 @@ class NetworkAttackSimulation():
         
         plt.tight_layout()
     
-        if save_fig_path:
-            fig2.savefig(os.path.join(save_fig_path, "edges.png"), dpi=300, bbox_inches='tight')
+        if full_save_path:
+            fig2.savefig(os.path.join(full_save_path, "edges.png"), dpi=300, bbox_inches='tight')
 
         
         #--------------- 3. Density ---------------
@@ -483,8 +497,8 @@ class NetworkAttackSimulation():
         
         plt.tight_layout()
         
-        if save_fig_path:
-            fig3.savefig(os.path.join(save_fig_path, "density.png"), dpi=300, bbox_inches='tight')
+        if full_save_path:
+            fig3.savefig(os.path.join(full_save_path, "density.png"), dpi=300, bbox_inches='tight')
 
         
         # --------------- 4. Largest Component Size ---------------
@@ -503,8 +517,8 @@ class NetworkAttackSimulation():
     
         plt.tight_layout()
         
-        if save_fig_path:
-            fig4.savefig(os.path.join(save_fig_path, "components.png"), dpi=300, bbox_inches='tight')
+        if full_save_path:
+            fig4.savefig(os.path.join(full_save_path, "components.png"), dpi=300, bbox_inches='tight')
 
         
         #--------------- 5. Centrality Measures ---------------
@@ -548,8 +562,8 @@ class NetworkAttackSimulation():
         
         plt.tight_layout()
         
-        if save_fig_path:
-            fig5.savefig(os.path.join(save_fig_path, "centrality.png"), dpi=300, bbox_inches='tight')
+        if full_save_path:
+            fig5.savefig(os.path.join(full_save_path, "centrality.png"), dpi=300, bbox_inches='tight')
 
 
         #--------------- 6. Path Length Metrics ---------------
@@ -568,8 +582,8 @@ class NetworkAttackSimulation():
     
         plt.tight_layout()
         
-        if save_fig_path:
-            fig6.savefig(os.path.join(save_fig_path, "path_length.png"), dpi=300, bbox_inches='tight')
+        if full_save_path:
+            fig6.savefig(os.path.join(full_save_path, "path_length.png"), dpi=300, bbox_inches='tight')
 
 
         #--------------- 7. Clustering Coefficients ---------------
@@ -588,8 +602,8 @@ class NetworkAttackSimulation():
         
         plt.tight_layout()
         
-        if save_fig_path:
-            fig7.savefig(os.path.join(save_fig_path, "clustering.png"), dpi=300, bbox_inches='tight')
+        if full_save_path:
+            fig7.savefig(os.path.join(full_save_path, "clustering.png"), dpi=300, bbox_inches='tight')
 
 
         #--------------- 8. Attack and Recovery Activity ---------------
@@ -631,10 +645,10 @@ class NetworkAttackSimulation():
     
         plt.tight_layout()
 
-        if save_fig_path:
-            fig8.savefig(os.path.join(save_fig_path, "activity.png"), dpi=300, bbox_inches='tight')
+        if full_save_path:
+            fig8.savefig(os.path.join(full_save_path, "activity.png"), dpi=300, bbox_inches='tight')
         
-        print(f"\nAll figures saved in directory: {save_fig_path}")
+        print(f"\nAll figures saved in directory: {full_save_path}")
 
         
         plt.show()
