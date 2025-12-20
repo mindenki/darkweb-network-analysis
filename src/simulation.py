@@ -31,7 +31,7 @@ class NetworkAttackSimulation():
                  recovery_edge_type: str="realistic",
                  recovery_edge_probability: float=0.001,
                  recovery_interval: int = 1,
-                 metric_interval: int = 1
+                 metric_interval: int = 1,
                  ):
         #graph
         self.graph = graph
@@ -59,7 +59,8 @@ class NetworkAttackSimulation():
         self.metric_interval = metric_interval
         self.random_seed = random_seed or random.randint(0, 100000)
         self.iterations_completed: int = 0
-    
+        self.last_pagerank = None
+        self.original_pagerank = nx.pagerank(self.original_graph)
         
         # set random seed
         np.random.seed(self.random_seed)
@@ -76,16 +77,33 @@ class NetworkAttackSimulation():
         self.attack_log.clear()
         self.recovery_log.clear()
         self.removed_nodes.clear()
+        self.last_pagerank = None
 
         # reseed just in case
         np.random.seed(self.random_seed)
         random.seed(self.random_seed)
         
         logger.info("Simulation reset to initial state.")
+    
+    def get_reactive_pagerank(self):
+        """Computes PageRank reactively using the previous state as a starting point."""
+        if not self.graph.nodes:
+            return {}
+        
+        # Filter the previous PageRank to only include nodes still in the graph
+        if self.last_pagerank is not None:
+            self.last_pagerank = {k: v for k, v in self.last_pagerank.items() if k in self.graph}
+        
+        self.last_pagerank = nx.pagerank(
+            self.graph, 
+            nstart=self.last_pagerank, 
+            max_iter=100, 
+            tol=1e-06
+        )
+        return self.last_pagerank
         
     
     # -----ATTACKS-----
-    
     
     def random_attack(self):
         nodes = list(self.graph.nodes) 
@@ -100,32 +118,24 @@ class NetworkAttackSimulation():
         logger.debug("Random attack removed node: %s", node)
         
 
-    def targeted_attack(self, metric: Literal["betweenness", "closeness", "in_degree", "out_degree", "pagerank", "harmonic"] = 'harmonic', num_nodes_to_remove: int = 1):
-        
+    def targeted_attack(self, metric='pagerank', num_nodes_to_remove=1):
         G = self.graph
-        
         if G.number_of_nodes() == 0:
             self.attack_log.append({"iteration": self.iterations_completed, "nodes": []})
             return
-        
-        dict_metric = {
-            "betweenness": nx.betweenness_centrality,
-            "closeness": nx.closeness_centrality,
-            "pagerank": nx.pagerank,
-            "in_degree": dict(G.in_degree()),
-            "out_degree": dict(G.out_degree()),
-            "harmonic": nx.harmonic_centrality
-        }
-        
-        if metric not in dict_metric:
-            raise ValueError(f"Invalid metric: {metric}. Choose from: {list(dict_metric.keys())}")
-        
-        metric_obj = dict_metric[metric]
-        
-        if callable(metric_obj):
-            centrality = metric_obj(G)
+
+        if metric == "pagerank":
+            centrality = self.get_reactive_pagerank()
         else:
-            centrality = metric_obj
+            dict_metric = {
+                "betweenness": lambda: nx.betweenness_centrality(G, k=min(len(G), 100)), # Sampled (it would be too slow without)
+                "closeness": nx.closeness_centrality,
+                "in_degree": lambda: dict(G.in_degree()),
+                "out_degree": lambda: dict(G.out_degree()),
+                "harmonic": nx.harmonic_centrality
+            }
+            metric_obj = dict_metric[metric]
+            centrality = metric_obj() if callable(metric_obj) else metric_obj       
         
         if not isinstance(centrality, dict):
             raise TypeError(f"Centrality computation failed. Expected dict, got {type(centrality)}")
@@ -138,12 +148,13 @@ class NetworkAttackSimulation():
             if G.has_node(node):
                 G.remove_node(node)
                 self.removed_nodes.add(node)
+                if self.last_pagerank: # Remove from cache
+                    self.last_pagerank.pop(node, None)
         
         self.attack_log.append({"iteration": self.iterations_completed, "nodes": nodes_to_remove})
         logger.debug("Targeted attack removed nodes %s by metric %s", nodes_to_remove, metric)
         
-        return
-
+        return   
 
     # -----RECOVERY-----
     
@@ -182,22 +193,21 @@ class NetworkAttackSimulation():
                 for nbr, _ in self.original_graph.in_edges(node):
                     if nbr in self.graph:
                         self.graph.add_edge(nbr, node)
-                        recovered_in_edges.append((nbr, node))
+                        recovered_in_edges.append((nbr, node))            
                         
         elif recover_type == "random":
-            # add random edges uniformly with a small probability
-            possible_neighbors = [n for n in self.graph.nodes if n != node]
+            possible_neighbors = list(self.graph.nodes)
+            if not possible_neighbors: return
 
-            # 1) Random OUTGOING edges:
-            for nbr in possible_neighbors:
-                if np.random.rand() < self.recovery_edge_probability :
-                    self.graph.add_edge(node, nbr)
-                    recovered_out_edges.append((node, nbr))
-            # 2) Random INCOMING edges:
-            for nbr in possible_neighbors:
-                if np.random.rand() < self.recovery_edge_probability :
-                    self.graph.add_edge(nbr, node)
-                    recovered_in_edges.append((nbr, node))
+            n_out = np.random.binomial(len(possible_neighbors), self.recovery_edge_probability)
+            n_in = np.random.binomial(len(possible_neighbors), self.recovery_edge_probability)
+
+            if n_out > 0:
+                targets = random.sample(possible_neighbors, min(n_out, len(possible_neighbors)))
+                self.graph.add_edges_from([(node, t) for t in targets])
+            if n_in > 0:
+                sources = random.sample(possible_neighbors, min(n_in, len(possible_neighbors)))
+                self.graph.add_edges_from([(s, node) for s in sources])
         
         logger.debug("Recovered %d outgoing edges and %d incoming edges for node %s using %s",
                      len(recovered_out_edges), len(recovered_in_edges), node, recover_type)
@@ -234,7 +244,7 @@ class NetworkAttackSimulation():
         
         # Compute metric weights
         if metric == "pagerank":
-            weights = nx.pagerank(Go)
+            weights = self.original_pagerank
         elif metric == "betweenness":
             weights = nx.betweenness_centrality(Go)
         elif metric == "closeness":
@@ -323,7 +333,7 @@ class NetworkAttackSimulation():
         #Centrality (betweenness, closeness, pagerank)
         betweenness = nx.betweenness_centrality(G)
         closeness = nx.closeness_centrality(G)
-        pagerank = nx.pagerank(G)
+        pagerank = self.get_reactive_pagerank()
         harmonic = nx.harmonic_centrality(G)
         
         #avg centrality values
