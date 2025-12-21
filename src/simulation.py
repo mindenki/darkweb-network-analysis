@@ -409,7 +409,7 @@ class NetworkAttackSimulation():
         
         # Unique subfolder name based on time + parameters
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        folder_name = f"{timestamp}_{self.type_of_attack}_{self.type_of_recovery}"
+        folder_name = f"{timestamp}_{self.type_of_attack}_{self.type_of_recovery}.{self.recovery_edge_type}"
         
         # Update the save path to be inside this new folder
         full_save_path = os.path.join(save_fig_path, folder_name)
