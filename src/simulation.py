@@ -129,10 +129,10 @@ class NetworkAttackSimulation():
         else:
             dict_metric = {
                 "betweenness": lambda: nx.betweenness_centrality(G, k=min(len(G), 100)), # Sampled (it would be too slow without)
-                "closeness": nx.closeness_centrality,
+                "closeness": nx.closeness_centrality(G),
                 "in_degree": lambda: dict(G.in_degree()),
                 "out_degree": lambda: dict(G.out_degree()),
-                "harmonic": nx.harmonic_centrality
+                "harmonic": nx.harmonic_centrality(G)
             }
             metric_obj = dict_metric[metric]
             centrality = metric_obj() if callable(metric_obj) else metric_obj       
@@ -660,7 +660,7 @@ class NetworkAttackSimulation():
         for i in tqdm(range(self.num_of_iter), desc="Running network simulation", unit="iter",smoothing=0.1):
 
             self.iterations_completed = i + 1
-            logger.info("Starting iteration %d/%d...", self.iterations_completed, self.num_of_iter)
+            #logger.info("Starting iteration %d/%d...", self.iterations_completed, self.num_of_iter)
 
             # ATTACK
             if self.type_of_attack == "random":
@@ -676,7 +676,7 @@ class NetworkAttackSimulation():
                 if self.type_of_recovery == "uniform":
                     self.uniform_recovery()
                 elif self.type_of_recovery == "weighted":
-                    self.weighted_recovery(metric="in_degree")
+                    self.weighted_recovery(metric=self.metric)
                 elif self.type_of_recovery == "none":
                     self.recovery_log.append({"iteration": i, "nodes": []})
                 else:
