@@ -676,7 +676,7 @@ class NetworkAttackSimulation():
                 if self.type_of_recovery == "uniform":
                     self.uniform_recovery()
                 elif self.type_of_recovery == "weighted":
-                    self.weighted_recovery(metric=self.metric)
+                    self.weighted_recovery(metric="in_degree")
                 elif self.type_of_recovery == "none":
                     self.recovery_log.append({"iteration": i, "nodes": []})
                 else:
